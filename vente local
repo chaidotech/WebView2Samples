@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>LemodelH - App de Vente</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Segoe UI', sans-serif; background: #f8fbff; color: #333; }
+        header { background: #1e88e5; color: white; padding: 1rem; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        nav { display: flex; justify-content: center; background: #e3f2fd; padding: 0.5rem; gap: 0.5rem; flex-wrap: wrap; }
+        nav button { padding: 0.5rem 1rem; border: none; background: #1976d2; color: white; border-radius: 6px; cursor: pointer; transition: 0.3s; }
+        nav button:hover { background: #1565c0; }
+        section { display: none; padding: 1rem; max-width: 900px; margin: auto; background: white; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); margin-top: 1rem; }
+        section.active { display: block; }
+        input, select { padding: 0.5rem; margin: 0.25rem 0; width: 100%; border: 1px solid #ccc; border-radius: 4px; }
+        .btn { background: #2196f3; color: white; border: none; padding: 0.5rem 1rem; border-radius: 4px; cursor: pointer; margin-top: 0.5rem; }
+        .btn:hover { background: #1976d2; }
+        table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+        th, td { border: 1px solid #ddd; padding: 0.5rem; text-align: left; }
+        th { background: #f1f1f1; }
+        img { max-width: 50px; max-height: 50px; margin-top: 0.5rem; }
+    </style>
+</head>
+<body>
+<header>
+    <h1>LemodelH - App de Vente</h1>
+    <p>📍 rue Jean-Baptiste Delmas 33 | ☎ 39413030</p>
+    <p id="roleInfo">Connecté en tant que : <strong id="userRole"></strong></p>
+    <button class="btn" onclick="logout()">Se déconnecter</button>
+</header>
+<nav>
+    <button onclick="showSection('produits')">Produits</button>
+    <button onclick="showSection('inventaire')">Inventaire</button>
+    <button onclick="showSection('ventes')">Ventes</button>
+    <button onclick="showSection('factures')">Factures</button>
+    <button onclick="showSection('stats')">Statistiques</button>
+</nav>
+
+<section id="produits" class="active">
+    <h2>➕ Ajouter un produit</h2>
+    <input type="text" id="nomProduit" placeholder="Nom du produit">
+    <input type="number" id="prixProduit" placeholder="Prix (HTG)">
+    <input type="number" id="stockProduit" placeholder="Stock initial">
+    <input type="file" id="photoProduit">
+    <button class="btn" onclick="ajouterProduit()">Ajouter</button>
+    <button class="btn" onclick="exporterProduitsCSV()">Exporter Produits (CSV)</button>
+    <div id="listeProduits"></div>
+</section>
+
+<section id="inventaire">
+    <h2>📦 Inventaire</h2>
+    <input type="number" id="rechercheId" placeholder="Rechercher par ID produit (ex: 1)">
+    <button class="btn" onclick="rechercherProduitParId()">Rechercher</button>
+    <div id="resultatRecherche"></div>
+</section>
+
+<section id="ventes">
+    <h2>💰 Nouvelle Vente</h2>
+    <input type="number" id="venteId" placeholder="ID Produit">
+    <input type="number" id="quantiteVendue" placeholder="Quantité vendue">
+    <input type="text" id="clientNom" placeholder="Nom du client">
+    <button class="btn" onclick="vendreProduit()">Vendre</button>
+</section>
+
+<section id="factures">
+    <h2>🧾 Factures</h2>
+    <div id="listeFactures"></div>
+</section>
+
+<section id="stats">
+    <h2>📊 Historique des ventes</h2>
+    <div id="historique"></div>
+</section>
+
+<script>
+let produits = JSON.parse(localStorage.getItem('produits') || '[]');
+let factures = JSON.parse(localStorage.getItem('factures') || '[]');
+let historique = JSON.parse(localStorage.getItem('historique') || '[]');
+let role = localStorage.getItem('role') || 'vendeur';
+let idAuto = produits.length > 0 ? produits[produits.length - 1].id + 1 : 1;
+
+function showSection(id) {
+    document.querySelectorAll('section').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    if (id === 'produits') afficherProduits();
+    if (id === 'factures') afficherFactures();
+    if (id === 'stats') afficherHistorique();
+}
+
+document.getElementById('userRole').textContent = role;
+
+function formatID(id) {
+    return id.toString().padStart(3, '0');
+}
+
+function ajouterProduit() {
+    const nom = document.getElementById('nomProduit').value;
+    const prix = parseFloat(document.getElementById('prixProduit').value);
+    const stock = parseInt(document.getElementById('stockProduit').value);
+    const photoInput = document.getElementById('photoProduit');
+    if (!nom || isNaN(prix) || isNaN(stock)) return alert('Champs incomplets');
+
+    const ajouterProduitFinal = (imageData = '') => {
+        const produit = { id: idAuto++, nom, prix, stock, photo: imageData };
+        produits.push(produit);
+        localStorage.setItem('produits', JSON.stringify(produits));
+        afficherProduits();
+    };
+
+    if (photoInput.files[0]) {
+        const reader = new FileReader();
+        reader.onload = () => ajouterProduitFinal(reader.result);
+        reader.readAsDataURL(photoInput.files[0]);
+    } else {
+        ajouterProduitFinal();
+    }
+}
+
+function afficherProduits() {
+    const div = document.getElementById('listeProduits');
+    div.innerHTML = produits.map(p => `
+        <div style="margin: 1rem 0; border-bottom: 1px solid #ccc; padding-bottom: 0.5rem;">
+            <strong>ID: ${formatID(p.id)} - ${p.nom}</strong><br>
+            Prix: ${p.prix} HTG | Stock: ${p.stock}<br>
+            ${p.photo ? `<img src="${p.photo}" />` : ''}<br>
+            <button class="btn" onclick="modifierProduit(${p.id})">Modifier</button>
+            ${role === 'admin' ? `<button class="btn" onclick="supprimerProduit(${p.id})">Supprimer</button>` : ''}
+        </div>
+    `).join('');
+}
+
+function modifierProduit(id) {
+    const p = produits.find(prod => prod.id === id);
+    const nom = prompt('Nom:', p.nom);
+    const prix = prompt('Prix:', p.prix);
+    const stock = prompt('Stock:', p.stock);
+    if (nom && prix && stock) {
+        p.nom = nom;
+        p.prix = parseFloat(prix);
+        p.stock = parseInt(stock);
+        localStorage.setItem('produits', JSON.stringify(produits));
+        afficherProduits();
+    }
+}
+
+function supprimerProduit(id) {
+    if (confirm('Confirmer suppression ?')) {
+        produits = produits.filter(p => p.id !== id);
+        localStorage.setItem('produits', JSON.stringify(produits));
+        afficherProduits();
+    }
+}
+
+function rechercherProduitParId() {
+    const id = parseInt(document.getElementById('rechercheId').value);
+    const p = produits.find(p => p.id === id);
+    document.getElementById('resultatRecherche').innerHTML = p ?
+        `ID: ${formatID(p.id)} - ${p.nom}<br>Stock: ${p.stock}` : 'Produit non trouvé';
+}
+
+function vendreProduit() {
+    const id = parseInt(document.getElementById('venteId').value);
+    const qte = parseInt(document.getElementById('quantiteVendue').value);
+    const client = document.getElementById('clientNom').value;
+    const produit = produits.find(p => p.id === id);
+    if (!produit || produit.stock < qte) return alert('Stock insuffisant');
+    produit.stock -= qte;
+    const facture = {
+        date: new Date().toLocaleString(),
+        produit: produit.nom,
+        quantite: qte,
+        total: produit.prix * qte,
+        client
+    };
+    factures.push(facture);
+    historique.push(facture);
+    localStorage.setItem('produits', JSON.stringify(produits));
+    localStorage.setItem('factures', JSON.stringify(factures));
+    localStorage.setItem('historique', JSON.stringify(historique));
+    alert('Vente enregistrée.');
+    document.getElementById('venteId').value = '';
+    document.getElementById('quantiteVendue').value = '';
+    document.getElementById('clientNom').value = '';
+}
+
+function afficherFactures() {
+    document.getElementById('listeFactures').innerHTML = factures.map((f, i) => `
+        <div style="margin-bottom: 1rem; border-bottom: 1px solid #ccc;">
+            ${f.date} | Client: ${f.client} | ${f.quantite} x ${f.produit} = ${f.total} HTG
+            <button class="btn" onclick="imprimerUneFacture(${i})">🖨️</button>
+        </div>
+    `).join('');
+}
+
+function imprimerUneFacture(index) {
+    const f = factures[index];
+    const contenu = `
+        <div style="font-size:12px; font-family: monospace">
+            <h3>LemodelH</h3>
+            Téléphone : 39413030<br>
+            Adresse : rue Jean-Baptiste Delmas 33<br><br>
+            Facture :<br>
+            Date : ${f.date}<br>
+            Client : ${f.client}<br>
+            Produit : ${f.produit}<br>
+            Quantité : ${f.quantite}<br>
+            Total : ${f.total} HTG
+        </div>
+    `;
+    const win = window.open('', '', 'width=300,height=600');
+    win.document.write(contenu);
+    win.print();
+    win.close();
+}
+
+function afficherHistorique() {
+    document.getElementById('historique').innerHTML = historique.map(f =>
+        `${f.date} | ${f.client} a acheté ${f.quantite} x ${f.produit} = ${f.total} HTG`
+    ).join('<br>');
+}
+
+function exporterProduitsCSV() {
+    const lignes = produits.map(p => `${formatID(p.id)},${p.nom},${p.prix},${p.stock}`);
+    const csv = 'ID,Nom,Prix,Stock\n' + lignes.join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'produits.csv';
+    a.click();
+}
+
+function logout() {
+    localStorage.removeItem('role');
+    window.location.href = 'login.html';
+}
+
+showSection('produits');
+</script>
+</body>
+</html>
